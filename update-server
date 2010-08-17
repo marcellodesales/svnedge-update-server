@@ -1,0 +1,149 @@
+#!/bin/sh
+#
+# chkconfig: 2345 60 30
+# description: update-server runs the package update server
+# config: /etc/sysconfig/update-server
+
+CONFIG=/etc/sysconfig/update-server
+test -r "$CONFIG" && . "$CONFIG"
+
+# Source function library.
+. /etc/rc.d/init.d/functions
+
+RETVAL=0
+
+bindir=/opt/update-server/pkg-toolkit-linux-i386/pkg/bin
+repodir=${REPOS_DIR:-/opt/update-server/repos}
+releaserepodir=${repodir}/release
+stagerepodir=${repodir}/stage
+# release repo dirs
+releaselinuxrepo=${releaserepodir}/linux
+releaselinux64repo=${releaserepodir}/linux-64
+releasewindowsrepo=${releaserepodir}/windows
+releasewindows64repo=${releaserepodir}/windows-64
+releasesolarisx86repo=${releaserepodir}/solaris-x86
+releasesolarissparcrepo=${releaserepodir}/solaris-sparc
+releasemacrepo=${releaserepodir}/mac
+# stage repo dirs
+stagelinuxrepo=${stagerepodir}/linux
+stagelinux64repo=${stagerepodir}/linux-64
+stagewindowsrepo=${stagerepodir}/windows
+stagewindows64repo=${stagerepodir}/windows-64
+stagesolarisx86repo=${stagerepodir}/solaris-x86
+stagesolarissparcrepo=${stagerepodir}/solaris-sparc
+stagemacrepo=${stagerepodir}/mac
+# release ports
+releaselinuxport=10001
+releaselinux64port=10006
+releasewindowsport=10002
+releasewindows64port=10007
+releasemacport=10003
+releasesolarisx86port=10004
+releasesolarissparcport=10005
+# stage ports
+stagelinuxport=10101
+stagelinux64port=10106
+stagewindowsport=10102
+stagewindows64port=10107
+stagemacport=10103
+stagesolarisx86port=10104
+stagesolarissparcport=10105
+
+pkgprog=${bindir}/pkg.depotd
+lockfile=/var/lock/subsys/update-server
+processname=pkg.depotd
+
+
+run_pkgd () {
+    [ $RETVAL -ne 0 ] && return
+    local repodir=$1
+    local repoport=$2
+    local platform=$3
+    local pidfile="update-server-${platform}.pid"
+    local logfile="update-server-${platform}.log"
+    local ret=0
+
+    daemon --user=updator $pkgprog -d $repodir -p $repoport --rebuild > /var/log/$logfile 2>&1 &
+    RETVAL=$?
+}
+
+get_pkgd_pids () {
+    ps -e -o pid,args | grep python | grep update-server \
+        | sed 's/^[ \t]*//' | cut -f 1 -d " " | tr "\n" " "
+}
+
+kill_pkgds () {
+    local procs=`get_pkgd_pids`
+    if [ "$procs" != "" ]; then
+        kill $procs
+    else
+        echo "Update servers not running"
+    fi
+}
+
+start() {
+    echo -n $"Starting up update servers: "
+    # release
+    run_pkgd $releaselinuxrepo $releaselinuxport "linux-release"
+    run_pkgd $releaselinux64repo $releaselinux64port "linux64-release"
+    run_pkgd $releasewindowsrepo $releasewindowsport "windows-release"
+    run_pkgd $releasewindows64repo $releasewindows64port "windows-release"
+    run_pkgd $releasemacrepo $releasemacport "mac-release"
+    run_pkgd $releasesolarisx86repo $releasesolarisx86port "solarisx86-release"
+    run_pkgd $releasesolarissparcrepo $releasesolarissparcport "solarissparc-release"
+    # stage
+    run_pkgd $stagelinuxrepo $stagelinuxport "linux-stage"
+    run_pkgd $stagelinux64repo $stagelinux64port "linux64-stage"
+    run_pkgd $stagewindowsrepo $stagewindowsport "windows-stage"
+    run_pkgd $stagewindows64repo $stagewindows64port "windows-stage"
+    run_pkgd $stagemacrepo $stagemacport "mac-stage"
+    run_pkgd $stagesolarisx86repo $stagesolarisx86port "solarisx86-stage"
+    run_pkgd $stagesolarissparcrepo $stagesolarissparcport "solarissparc-stage"
+    #echo "retvals: RETVAL: $RETVAL"
+    [ $RETVAL -eq 0 ] && touch $lockfile
+    echo
+    return $RETVAL
+}
+
+stop() {
+	echo -n $"Shutting down update server: "
+        kill_pkgds
+	RETVAL=$?
+	echo
+	[ $RETVAL -eq 0 ] && rm -f $lockfile
+}
+
+dostatus() {
+    local procs=`get_pkgd_pids`
+    if [ "$procs" != "" ]; then
+        echo "Update servers running.  Process ids: $procs"
+    else
+        echo "Update servers are not running"
+    fi
+}
+
+restart() {
+    stop
+    start
+}
+
+# See how we were called.
+case "$1" in
+  start)
+	start
+	;;
+  stop)
+	stop
+	;;
+  status)
+	dostatus
+	;;
+  restart|reload)
+	restart
+	;;
+  *)
+	echo $"Usage: update-server {start|stop|status|restart}"
+	exit 1
+esac
+
+exit $RETVAL
