@@ -3,7 +3,7 @@
 # Cron job that cleans up dev update server repos, taking care of
 # daemon stop/start.
 #
-# Added to run weekly on cu025:
+# Added to run weekly on cu166.cloud.sp:
 #
 # 12 0 * * 0 /opt/update-server/cleanup-repo-cron.sh > /dev/null 2>&1
 #
